@@ -56,41 +56,47 @@ def course_information(department_url):
         return course_info_list
     soup = BeautifulSoup(response.text, "html.parser")
     course_elements = soup.find_all("div", class_="courseblock main")
-    #subsequence_blocks = soup.find_all("div", class_="courseblock subsequence")
-    for course_element in course_elements:
-        course_title_elem = course_element.find("p", class_="courseblocktitle")
-        course_title = course_title_elem.text.strip() if course_title_elem else "N/A"
-        description_elem = course_element.find("p", class_="courseblockdesc")
-        description = description_elem.text.strip() if description_elem else "N/A"
-        detail_elem = course_element.find("p", class_="courseblockdetail")
-        instructor = terms_offered = equivalent_courses = pre_req = "N/A"
-        if detail_elem:
-            lines = detail_elem.get_text(separator="\n").split("\n")
-            for line in lines:
-                if "Instructor(s):" in line:
-                    instructor = line.split("Instructor(s):")[1].strip()
-                elif "Terms Offered:" in line:
-                    terms_offered = line.split("Terms Offered:")[1].strip()
-                elif "Equivalent Course(s):" in line:
-                    equivalent_courses = line.split("Equivalent Course(s):")[1].strip()
-                elif "Prerequisite(s):" in line:
-                    pre_req = line.split("Prerequisite(s):")[1].strip()
-        course_info = {
-            'Course Number': course_title,
-            'Description': description,
-            'Instructor': instructor,
-            'Terms Offered': terms_offered,
-            'Equivalent Courses': equivalent_courses,
-            'Prerequisite': pre_req}
-        course_info_list.append(course_info)
-        if course_title_elem:
-            course_title_text = course_title_elem.text.strip()
-            course_title_text = course_title_text.encode('ascii', 'ignore').decode()
-            course_code_title_parts = course_title_text.split(".")
-            course_code = course_code_title_parts[0].strip()
-            course_info['Course Number'] = course_code
-        else:
-            course_info['Course Number'] = "N/A"
+    subsequence_blocks = soup.find_all("div", class_="courseblock subsequence")
+    for course_element in course_elements + subsequence_blocks:
+        if course_element.find("p", class_="courseblockdetail"):
+            course_title_elem = course_element.find("p", class_="courseblocktitle")
+            description_elem = course_element.find("p", class_="courseblockdesc")
+            if description_elem:
+                course_title = course_title_elem.text.strip() if course_title_elem else "N/A"
+                description = description_elem.text.strip()
+                detail_elem = course_element.find("p", class_="courseblockdetail")
+                instructor = terms_offered = equivalent_courses = pre_req = "N/A"
+                if detail_elem:
+                    lines = detail_elem.get_text(separator="\n").split("\n")
+                    for line in lines:
+                        if "Instructor(s):" in line:
+                            parts = line.split("Instructor(s):")
+                            if len(parts) > 1:
+                                instructor = parts[1].strip()
+                                if "Terms Offered:" in instructor:
+                                    instructor_terms_parts = instructor.split("Terms Offered:")
+                                    instructor = instructor_terms_parts[0].strip()
+                                    terms_offered = instructor_terms_parts[1].strip()
+                        elif "Equivalent Course(s):" in line:
+                            equivalent_courses = line.split("Equivalent Course(s):")[1].strip()
+                        elif "Prerequisite(s):" in line:
+                            pre_req = line.split("Prerequisite(s):")[1].strip()
+                course_info = {
+                    'Course Number': course_title,
+                    'Description': description,
+                    'Instructor': instructor,
+                    'Terms Offered': terms_offered,
+                    'Equivalent Courses': equivalent_courses,
+                    'Prerequisite': pre_req}
+                course_info_list.append(course_info)
+                if course_title_elem:
+                    course_title_text = course_title_elem.text.strip()
+                    course_title_text = course_title_text.encode('ascii', 'ignore').decode()
+                    course_code_title_parts = course_title_text.split(".")
+                    course_code = course_code_title_parts[0].strip()
+                    course_info['Course Number'] = course_code
+                else:
+                    course_info['Course Number'] = "N/A"
     return course_info_list
 
 def make_csv(course_info_list):
@@ -122,3 +128,10 @@ def final():
 
 college_courses = pd.read_csv("college_courses.csv")
 len(college_courses)
+
+df = pd.DataFrame(college_courses)
+df["Department"]=df["Course Number"].str[:4]
+df.groupby("Department")["Course Number"].count().idxmax()
+
+quarter_counts = df['Terms Offered'].str.split().str[0].value_counts()
+print("Number of classes offered in each quarter:", quarter_counts)
